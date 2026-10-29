@@ -1,0 +1,23 @@
+{
+"compilerOptions": {
+"target": "ES2023",
+"module": "commonjs",
+"lib": [
+"ES2023"
+],
+"declaration": true,
+"sourceMap": true,
+"outDir": "./dist",
+"rootDir": "./src",
+"strict": true,
+"esModuleInterop": true,
+"skipLibCheck": true,
+"forceConsistentCasingInFileNames": true
+},
+"include": [
+"src/"
+],
+"exclude": [
+"/*.spec.ts"
+]
+}

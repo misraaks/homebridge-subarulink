@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Homebridge Community Discord
+    url: https://discord.gg/kqNCe2D
+    about: General help with Homebridge installation, Child Bridges, or Apple HomeKit pairing
+  - name: Upstream G-Two/subarulink Issues
+    url: https://github.com/G-Two/subarulink/issues
+    about: Check if MySubaru Connected Services is experiencing a broader regional API outage
+

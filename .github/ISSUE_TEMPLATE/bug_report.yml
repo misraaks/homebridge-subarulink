@@ -1,0 +1,99 @@
+name: Bug Report
+description: Report a bug, connection error, or unexpected accessory behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **Privacy Warning:** Never paste your real MySubaru **username**, **password**, **4-digit PIN**, **2FA code**, **`deviceId`**, or **17-character VIN** into a public GitHub issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the issue clearly, including what you expected to happen vs. what actually occurred.
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin Version
+      placeholder: "e.g. v1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Homebridge, Node.js & OS Environment
+      placeholder: "e.g. Homebridge v1.8.5 / v2.0, Node v22.14.0, Raspberry Pi OS Bookworm (arm64)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: country
+    attributes:
+      label: MySubaru Region
+      options:
+        - USA
+        - CAN
+    validations:
+      required: true
+
+  - type: dropdown
+    id: subscription
+    attributes:
+      label: Active MySubaru Connected Services Plan
+      description: Active remote commands (Lock, Remote Start, Force Wake) and live door/window status require Security / Security Plus / Companion+.
+      options:
+        - Security / Security Plus / Companion+ (Remote Commands Active)
+        - Safety / Safety Plus / Companion (Base Plan Only)
+        - No Active Subscription / Expired
+        - Unsure
+    validations:
+      required: true
+
+  - type: input
+    id: vehicle
+    attributes:
+      label: Vehicle Year & Model
+      placeholder: "e.g. 2023 Outback Touring XT (or Crosstrek PHEV)"
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Sanitized Plugin Config
+      description: Paste your Homebridge SubaruLink JSON block with `username`, `password`, `pin`, `deviceId`, and `vin` redacted.
+      render: json
+      placeholder: |
+        {
+          "platform": "SubaruLink",
+          "name": "Subaru",
+          "country": "USA",
+          "fetchIntervalMinutes": 15,
+          "updateIntervalMinutes": 0
+        }
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Homebridge Logs
+      description: Paste any `[Subaru]` or `[Python]` log lines around the issue (enable Homebridge Debug Mode `-D` for detailed RPC output). Remove any VINs or personal details.
+      render: text
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: redacted
+    attributes:
+      label: Sensitive Data Check
+      options:
+        - label: I have redacted my MySubaru username, password, PIN, 2FA code, deviceId, and VIN from the config and logs above.
+          required: true
+

@@ -1,0 +1,209 @@
+{
+"pluginAlias": "SubaruLink",
+"pluginType": "platform",
+  "singular": true,
+  "strictValidation": false,
+  "headerDisplay": "Self-contained MySubaru / Starlink integration for Homebridge. Configure your account credentials below (no manual subarulink.cfg required). For first-time 2FA registration, see the instructions in the README or enter a 2FA code directly below.",
+  "schema": {
+    "type": "object",
+    "required": [
+      "name",
+      "username",
+      "password",
+      "pin",
+      "country"
+    ],
+    "properties": {
+      "name": {
+        "title": "Platform Name",
+        "type": "string",
+        "default": "SubaruLink"
+      },
+      "username": {
+        "title": "MySubaru Username (Email)",
+        "type": "string",
+        "placeholder": "you@example.com"
+      },
+      "password": {
+        "title": "MySubaru Password",
+        "type": "string",
+        "x-schema-form": {
+          "type": "password"
+        }
+      },
+      "pin": {
+        "title": "MySubaru 4-Digit Security PIN",
+        "type": "string",
+        "pattern": "^[0-9]{4}$",
+        "description": "Required for remote commands (lock, unlock, remote start/stop, horn, lights)."
+      },
+      "country": {
+        "title": "Country",
+        "type": "string",
+        "default": "USA",
+        "oneOf": [
+          { "title": "United States (USA)", "enum": ["USA"] },
+          { "title": "Canada (CAN)", "enum": ["CAN"] }
+        ]
+      },
+"deviceId": {
+"title": "Device ID (Optional)",
+"type": "integer",
+"description": "Leave blank to automatically generate and persist a unique Device ID inside your Homebridge storage folder. If migrating from an existing subarulink.cfg, paste your old 10-digit device_id here to skip 2FA."
+},
+"deviceName": {
+"title": "Device Name",
+"type": "string",
+"default": "homebridge-subarulink",
+"description": "Name shown in your MySubaru Authorized Devices list."
+},
+"vin": {
+"title": "Target Vehicle VIN (Optional)",
+"type": "string",
+"description": "Leave blank to automatically discover all remote-capable vehicles on your account, or specify a single VIN."
+},
+"defaultPreset": {
+"title": "Primary Remote Start Climate Preset",
+"type": "string",
+"default": "Full Heat",
+"description": "Exact name of the climate preset (e.g., 'Full Heat', 'Full Cool', 'Auto', or a custom user preset created in the MySubaru app) for the primary Remote Start switch."
+},
+"additionalPresets": {
+"title": "Additional Climate Preset Switches",
+"type": "array",
+"items": {
+"type": "string"
+},
+"default": ["Full Cool", "Auto"],
+"description": "Optional additional climate preset names to expose as separate switches in HomeKit."
+},
+"engineRunDurationMinutes": {
+"title": "Remote Start Auto-Off Timer (Minutes)",
+"type": "integer",
+"default": 10,
+"minimum": 1,
+"maximum": 20,
+"description": "Starlink remote start runs the engine for 10 minutes by default. The HomeKit switch will automatically revert to 'Off' after this timer expires unless turned off manually earlier (which sends remote_stop)."
+},
+"unlockMode": {
+"title": "Default Door Unlock Target",
+"type": "string",
+"default": "ALL_DOORS",
+"oneOf": [
+{ "title": "All Doors", "enum": ["ALL_DOORS"] },
+{ "title": "Driver's Door Only", "enum": ["DRIVERS_DOOR"] },
+{ "title": "Tailgate / Rear Gate", "enum": ["TAILGATE_DOOR"] }
+]
+},
+"exposeTailgateUnlockSwitch": {
+"title": "Expose Separate Tailgate Unlock Switch",
+"type": "boolean",
+"default": false,
+"description": "Creates a momentary button to unlock only the tailgate (if supported by your model)."
+},
+"exposeHornSwitch": {
+"title": "Expose Panic Horn Switch",
+"type": "boolean",
+"default": false,
+"description": "Exposes a switch in HomeKit to trigger/stop the vehicle horn."
+},
+"exposeLightsSwitch": {
+"title": "Expose Flash Lights Switch",
+"type": "boolean",
+"default": true,
+"description": "Exposes a switch in HomeKit to flash/stop the vehicle hazard lights."
+},
+"exposeLocateSwitch": {
+"title": "Expose 'Force Vehicle Wake & Poll' Switch",
+"type": "boolean",
+"default": true,
+"description": "Exposes a momentary switch that wakes the car's DCM cellular module (Controller.update) to pull fresh sensor data on demand."
+},
+"exposeDoorWindowSensors": {
+"title": "Expose Door, Boot, Hood & Window Contact Sensors",
+"type": "boolean",
+"default": true,
+"description": "Exposes HomeKit Contact Sensors for doors, trunk/tailgate, and engine hood, plus power windows and sunroof when reported by your vehicle."
+},
+"fetchIntervalMinutes": {
+"title": "Server Cache Poll Interval (Minutes)",
+"type": "integer",
+"default": 15,
+"minimum": 5,
+"description": "How often to poll Subaru's cloud cache (Controller.fetch). This does NOT wake the car or drain the 12V battery."
+},
+"updateIntervalMinutes": {
+"title": "Active Vehicle Wake Interval (Minutes, 0 = Disabled)",
+"type": "integer",
+"default": 0,
+"minimum": 0,
+"description": "WARNING: Actively waking the car (Controller.update) uses the 12V auxiliary battery. Set to 0 (recommended) to never wake the car on a timer, or >= 60 (120+ minutes recommended) for periodic updates."
+},
+"twoFactorContactMethod": {
+"title": "2FA Contact Method (Only for Initial Registration)",
+"type": "string",
+"description": "Leave blank during normal use. If logs show 2FA is required and list available contact keys (e.g. 'userName' or 'phone'), enter the key here and restart to receive a 6-digit code."
+},
+"twoFactorCode": {
+"title": "2FA 6-Digit Verification Code (Only for Initial Registration)",
+"type": "string",
+"description": "Once you receive the 6-digit SMS/Email code, paste it here and restart Homebridge. Clear this field after registration succeeds."
+}
+}
+},
+"layout": [
+{
+"type": "fieldset",
+"title": "MySubaru Credentials",
+"items": [
+"name",
+"username",
+"password",
+"pin",
+"country",
+"vin"
+]
+},
+{
+"type": "fieldset",
+"title": "Remote Start & Climate Presets",
+"items": [
+"defaultPreset",
+"additionalPresets",
+"engineRunDurationMinutes"
+]
+},
+{
+"type": "fieldset",
+"title": "Doors, Sensors & Feature Switches",
+"items": [
+"unlockMode",
+"exposeTailgateUnlockSwitch",
+"exposeLightsSwitch",
+"exposeHornSwitch",
+"exposeLocateSwitch",
+"exposeDoorWindowSensors"
+]
+},
+{
+"type": "fieldset",
+"title": "Telemetry Polling & 12V Battery Protection",
+"items": [
+"fetchIntervalMinutes",
+"updateIntervalMinutes"
+]
+},
+{
+"type": "fieldset",
+"title": "Device Identity & Two-Factor Authentication (2FA)",
+"expandable": true,
+"expanded": false,
+"items": [
+"deviceId",
+"deviceName",
+"twoFactorContactMethod",
+"twoFactorCode"
+]
+}
+]
+}

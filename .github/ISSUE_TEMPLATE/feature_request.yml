@@ -1,0 +1,29 @@
+name: Feature Request
+description: Suggest an enhancement, new HomeKit service mapping, or configuration option
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature Summary
+      description: Briefly describe the feature or improvement you would like to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Motivation / HomeKit Use Case
+      description: What problem does this solve, or what HomeKit automation would this enable?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Vehicle / Upstream `subarulink` Support (Optional)
+      description: If applicable, mention your vehicle model/year and whether `G-Two/subarulink` already exposes the underlying field or command.
+    validations:
+      required: false
+

@@ -1,0 +1,62 @@
+{
+  "name": "homebridge-subarulink",
+  "displayName": "Homebridge SubaruLink",
+  "version": "1.0.0",
+  "description": "Self-contained Homebridge plugin for MySubaru Connected Services (Starlink) powered by G-Two/subarulink",
+  "author": {
+    "name": "misraaks",
+    "url": "https://github.com/misraaks"
+  },
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "packageManager": "pnpm@12.16.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/misraaks/homebridge-subarulink.git"
+  },
+  "homepage": "https://github.com/misraaks/homebridge-subarulink#readme",
+  "bugs": {
+    "url": "https://github.com/misraaks/homebridge-subarulink/issues"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "supports-hap",
+    "subaru",
+    "mysubaru",
+    "subarulink",
+    "starlink",
+    "homekit",
+    "car"
+  ],
+  "engines": {
+    "node": "^22 || ^24 || ^26",
+    "homebridge": "^1.8.0 || ^2.0.0"
+  },
+  "scripts": {
+    "build": "rimraf ./dist && tsc",
+    "prepublishOnly": "rimraf ./dist && tsc && node scripts/bootstrap-python.mjs --runtime-dir ./.runtime && node scripts/smoke-test.mjs",
+    "bootstrap": "node scripts/bootstrap-python.mjs --runtime-dir ./.runtime",
+    "watch": "tsc --watch",
+    "auth": "node scripts/interactive-auth.mjs",
+    "test": "node scripts/smoke-test.mjs"
+  },
+  "files": [
+    "dist",
+    "python",
+    "scripts/bootstrap-python.mjs",
+    "scripts/interactive-auth.mjs",
+    "config.schema.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "homebridge": "^1.8.0 || ^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "homebridge": "^2.4.0",
+    "rimraf": "^6.1.3",
+    "typescript": "^7.0.2"
+  }
+}
