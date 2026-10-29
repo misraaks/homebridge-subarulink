@@ -1,7 +1,7 @@
 {
   "name": "homebridge-subarulink",
   "displayName": "Homebridge SubaruLink",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Self-contained Homebridge plugin for MySubaru Connected Services (Starlink) powered by G-Two/subarulink",
   "author": {
     "name": "misraaks",
