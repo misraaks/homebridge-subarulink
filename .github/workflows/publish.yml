@@ -1,6 +1,10 @@
 name: Publish to npm
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
   release:
     types: [published]
   workflow_dispatch:
@@ -10,20 +14,40 @@ permissions:
 
 jobs:
   publish:
-    name: Build, Test & Publish (OIDC Provenance)
+    name: Release & Publish to npm (OIDC Provenance)
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check if package.json version is already published
+        id: check
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+          if npm view "homebridge-subarulink@${VERSION}" version >/dev/null 2>&1; then
+            echo "homebridge-subarulink@${VERSION} is already published on npm; skipping."
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version detected (${VERSION}); proceeding with release and publish."
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install pnpm
+        if: steps.check.outputs.should_publish == 'true'
         uses: pnpm/action-setup@v6
 
       - name: Setup Node.js
+        if: steps.check.outputs.should_publish == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: 24.x
@@ -31,31 +55,40 @@ jobs:
           cache: pnpm
 
       - name: Ensure latest npm CLI for OIDC Trusted Publishing
+        if: steps.check.outputs.should_publish == 'true'
         run: npm install -g npm@latest
 
-      - name: Verify release tag matches package.json version
-        if: github.event_name == 'release'
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          PKG_VERSION="v$(node -p "require('./package.json').version")"
-          if [ "$RELEASE_TAG" != "$PKG_VERSION" ]; then
-            echo "::error::Release tag ($RELEASE_TAG) does not match package.json version ($PKG_VERSION)"
-            exit 1
-          fi
-
       - name: Install dependencies
+        if: steps.check.outputs.should_publish == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Build TypeScript
+        if: steps.check.outputs.should_publish == 'true'
         run: pnpm run build
 
       - name: Bootstrap Python >=3.14 & subarulink
+        if: steps.check.outputs.should_publish == 'true'
         run: pnpm run bootstrap
 
       - name: Run smoke & integration test suite
+        if: steps.check.outputs.should_publish == 'true'
         run: pnpm test
 
       - name: Publish to npm with provenance
+        if: steps.check.outputs.should_publish == 'true'
         run: npm publish --provenance --access public --ignore-scripts
 
+      - name: Create GitHub Release and tag automatically
+        if: steps.check.outputs.should_publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.check.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG already exists."
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes
+          fi
