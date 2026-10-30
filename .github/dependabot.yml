@@ -12,6 +12,8 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    labels:
+      - "dependencies"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -19,4 +21,9 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 5
-
+    groups:
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
