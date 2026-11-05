@@ -1,6 +1,8 @@
 node_modules/
+dist/
 .runtime/
 __pycache__/
 *.py[cod]
+*.tsbuildinfo
 *.log
 .DS_Store

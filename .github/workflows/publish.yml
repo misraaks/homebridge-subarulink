@@ -81,6 +81,22 @@ jobs:
         if: steps.check.outputs.should_publish == 'true'
         run: pnpm test
 
+      - name: Verify built package contents
+        if: steps.check.outputs.should_publish == 'true'
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const { execSync } = require("node:child_process");
+            if (!fs.existsSync("dist/index.js") || !fs.existsSync("dist/index.d.ts")) {
+              throw new Error("Missing compiled dist/index.js or dist/index.d.ts");
+            }
+            const packInfo = JSON.parse(execSync("npm pack --dry-run --json --ignore-scripts", { encoding: "utf8" }));
+            const files = new Set(packInfo[0].files.map((f) => f.path));
+            for (const req of ["dist/index.js", "python/subaru_bridge.py", "scripts/bootstrap-python.mjs", "config.schema.json"]) {
+              if (!files.has(req)) throw new Error(`Missing required file in npm tarball: ${req}`);
+            }
+          '
+
       - name: Publish to npm with provenance
         if: steps.check.outputs.should_publish == 'true'
         run: npm publish --provenance --access public --ignore-scripts

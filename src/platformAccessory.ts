@@ -1,6 +1,6 @@
 import { CharacteristicValue, PlatformAccessory, Service } from 'homebridge';
 import { SubaruLinkPlatform } from './platform';
-import { DiscoveredVehicle, sanitizeHapName } from './settings';
+import { DiscoveredVehicle, formatLogError, sanitizeHapName } from './settings';
 
 const DOOR_SENSOR_DEFS = [
   { key: 'front_left_door', label: 'Front Left Door' },
@@ -57,6 +57,7 @@ export class SubaruVehicleAccessory {
   private lightsActive = false;
   private hornActive = false;
   private isRefreshing = false;
+  private consecutiveRefreshFailures = 0;
 
   constructor(
     private readonly platform: SubaruLinkPlatform,
@@ -303,7 +304,7 @@ export class SubaruVehicleAccessory {
 
     try {
       if (targetSecured) {
-        this.platform.log.info(`[${this.vehicle.name}] Sending remote LOCK command...`);
+        this.platform.log.debug(`[${this.vehicle.name}] Sending remote LOCK command...`);
         const ok = await this.platform.bridge.executeCommand(this.vehicle.vin, 'lock');
         if (ok) {
           this.lockCurrentState = Characteristic.LockCurrentState.SECURED;
@@ -311,7 +312,7 @@ export class SubaruVehicleAccessory {
             Characteristic.LockCurrentState,
             this.lockCurrentState,
           );
-          this.platform.log.info(`[${this.vehicle.name}] Vehicle LOCKED successfully.`);
+          this.platform.log.info(`[${this.vehicle.name}] Vehicle locked.`);
         } else {
           throw new this.platform.api.hap.HapStatusError(
             this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
@@ -319,7 +320,7 @@ export class SubaruVehicleAccessory {
         }
       } else {
         const unlockMode = this.platform.config.unlockMode || 'ALL_DOORS';
-        this.platform.log.info(
+        this.platform.log.debug(
           `[${this.vehicle.name}] Sending remote UNLOCK (${unlockMode}) command...`,
         );
         const ok = await this.platform.bridge.executeCommand(this.vehicle.vin, 'unlock', {
@@ -331,7 +332,7 @@ export class SubaruVehicleAccessory {
             Characteristic.LockCurrentState,
             this.lockCurrentState,
           );
-          this.platform.log.info(`[${this.vehicle.name}] Vehicle UNLOCKED (${unlockMode}).`);
+          this.platform.log.info(`[${this.vehicle.name}] Vehicle unlocked (${unlockMode}).`);
         } else {
           throw new this.platform.api.hap.HapStatusError(
             this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
@@ -342,7 +343,7 @@ export class SubaruVehicleAccessory {
       if (err instanceof this.platform.api.hap.HapStatusError) {
         throw err;
       }
-      this.platform.log.error(`[${this.vehicle.name}] Lock/unlock command failed:`, err);
+      this.platform.log.error(`[${this.vehicle.name}] Lock/unlock command failed: ${formatLogError(err)}`);
       throw new this.platform.api.hap.HapStatusError(
         this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
       );
@@ -359,7 +360,7 @@ export class SubaruVehicleAccessory {
 
     try {
       if (turnOn) {
-        this.platform.log.info(
+        this.platform.log.debug(
           `[${this.vehicle.name}] Sending REMOTE START command with preset "${presetName}"...`,
         );
         const ok = await this.platform.bridge.executeCommand(
@@ -387,7 +388,7 @@ export class SubaruVehicleAccessory {
           clearTimeout(this.engineTimer);
         }
         this.engineTimer = setTimeout(() => {
-          this.platform.log.info(
+          this.platform.log.debug(
             `[${this.vehicle.name}] Remote start ${runMinutes}-minute cycle finished; resetting HomeKit switch state to Off.`,
           );
           this.engineRunning = false;
@@ -397,10 +398,10 @@ export class SubaruVehicleAccessory {
         this.engineTimer.unref?.();
 
         this.platform.log.info(
-          `[${this.vehicle.name}] Remote Start (${presetName}) active for ${runMinutes} minutes.`,
+          `[${this.vehicle.name}] Remote start (${presetName}) active for ${runMinutes}m.`,
         );
       } else {
-        this.platform.log.info(`[${this.vehicle.name}] Sending REMOTE STOP command...`);
+        this.platform.log.debug(`[${this.vehicle.name}] Sending REMOTE STOP command...`);
         if (this.engineTimer) {
           clearTimeout(this.engineTimer);
           this.engineTimer = undefined;
@@ -425,7 +426,7 @@ export class SubaruVehicleAccessory {
       if (err instanceof this.platform.api.hap.HapStatusError) {
         throw err;
       }
-      this.platform.log.error(`[${this.vehicle.name}] Remote start/stop failed:`, err);
+      this.platform.log.error(`[${this.vehicle.name}] Remote start/stop failed: ${formatLogError(err)}`);
       this.syncRemoteStartSwitches();
       throw new this.platform.api.hap.HapStatusError(
         this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE,
@@ -461,7 +462,7 @@ export class SubaruVehicleAccessory {
         door: 'TAILGATE_DOOR',
       });
     } catch (err) {
-      this.platform.log.error(`[${this.vehicle.name}] Tailgate unlock failed:`, err);
+      this.platform.log.error(`[${this.vehicle.name}] Tailgate unlock failed: ${formatLogError(err)}`);
     } finally {
       const t = setTimeout(() => {
         this.tailgateSwitch?.updateCharacteristic(this.platform.Characteristic.On, false);
@@ -483,7 +484,7 @@ export class SubaruVehicleAccessory {
     try {
       ok = await this.platform.bridge.executeCommand(this.vehicle.vin, cmd);
     } catch (err) {
-      this.platform.log.error(`[${this.vehicle.name}] ${cmd} command failed:`, err);
+      this.platform.log.error(`[${this.vehicle.name}] ${cmd} command failed: ${formatLogError(err)}`);
     }
     if (!ok) {
       throw new this.platform.api.hap.HapStatusError(
@@ -512,7 +513,7 @@ export class SubaruVehicleAccessory {
     try {
       ok = await this.platform.bridge.executeCommand(this.vehicle.vin, cmd);
     } catch (err) {
-      this.platform.log.error(`[${this.vehicle.name}] ${cmd} command failed:`, err);
+      this.platform.log.error(`[${this.vehicle.name}] ${cmd} command failed: ${formatLogError(err)}`);
     }
     if (!ok) {
       throw new this.platform.api.hap.HapStatusError(
@@ -551,7 +552,7 @@ export class SubaruVehicleAccessory {
         'charge_start',
       );
     } catch (err) {
-      this.platform.log.error(`[${this.vehicle.name}] EV charge_start failed:`, err);
+      this.platform.log.error(`[${this.vehicle.name}] EV charge_start failed: ${formatLogError(err)}`);
     } finally {
       const t = setTimeout(() => {
         this.evChargeSwitch?.updateCharacteristic(this.platform.Characteristic.On, false);
@@ -693,13 +694,28 @@ export class SubaruVehicleAccessory {
         );
       }
 
+      if (this.consecutiveRefreshFailures >= 3) {
+        this.platform.log.info(
+          `[${this.vehicle.name}] MySubaru telemetry connection recovered.`,
+        );
+      }
+      this.consecutiveRefreshFailures = 0;
+
       this.platform.log.debug(
         `[${this.vehicle.name}] Telemetry refreshed (odometer=${telemetry.odometer ?? 'N/A'}, state=${telemetry.vehicle_state ?? 'N/A'})`,
       );
     } catch (err: any) {
-      this.platform.log.warn(
-        `[${this.vehicle.name}] Could not refresh vehicle telemetry: ${err.message}`,
-      );
+      this.consecutiveRefreshFailures++;
+      const conciseErr = formatLogError(err);
+      if (options.wake || this.consecutiveRefreshFailures === 3) {
+        this.platform.log.warn(
+          `[${this.vehicle.name}] Could not refresh vehicle telemetry: ${conciseErr}`,
+        );
+      } else {
+        this.platform.log.debug(
+          `[${this.vehicle.name}] Transient telemetry refresh failure (${this.consecutiveRefreshFailures}): ${conciseErr}`,
+        );
+      }
     } finally {
       this.isRefreshing = false;
     }

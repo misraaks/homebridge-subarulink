@@ -8,6 +8,7 @@ import {
 } from 'homebridge';
 import {
   DiscoveredVehicle,
+  formatLogError,
   PLATFORM_NAME,
   PLUGIN_NAME,
   SubaruLinkConfig,
@@ -48,7 +49,9 @@ export class SubaruLinkPlatform implements DynamicPlatformPlugin {
 
     this.api.on('didFinishLaunching', () => {
       this.initializePlatform().catch((err) => {
-        this.log.error('Unexpected error initializing SubaruLink platform:', err);
+        this.log.error(
+          `Unexpected error initializing SubaruLink platform: ${formatLogError(err)}`,
+        );
       });
     });
 
@@ -69,7 +72,7 @@ export class SubaruLinkPlatform implements DynamicPlatformPlugin {
   }
 
   public configureAccessory(accessory: PlatformAccessory): void {
-    this.log.info('Loading cached accessory:', accessory.displayName);
+    this.log.debug('Loading cached accessory:', accessory.displayName);
     this.accessories.push(accessory);
   }
 
@@ -146,7 +149,7 @@ export class SubaruLinkPlatform implements DynamicPlatformPlugin {
 
   private setupPollingTimers(vehicles: DiscoveredVehicle[]): void {
     const fetchMinutes = Math.max(5, this.config.fetchIntervalMinutes ?? 15);
-    this.log.info(
+    this.log.debug(
       `Scheduled non-waking MySubaru server cache poll every ${fetchMinutes} minutes.`,
     );
 

@@ -2,7 +2,12 @@ import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Logger } from 'homebridge';
-import { DiscoveredVehicle, SubaruLinkConfig, VehicleTelemetry } from './settings';
+import {
+  DiscoveredVehicle,
+  formatLogError,
+  SubaruLinkConfig,
+  VehicleTelemetry,
+} from './settings';
 
 interface PendingRequest {
   resolve: (value: any) => void;
@@ -155,7 +160,7 @@ export class SubaruPythonBridge {
           if (isErr) {
             this.log.debug('[bootstrap]', line);
           } else {
-            this.log.info(line.replace(/^\[homebridge-subarulink:bootstrap\]\s*/, ''));
+            this.log.debug(line.replace(/^\[homebridge-subarulink:bootstrap\]\s*/, ''));
           }
         }
       };
@@ -187,7 +192,7 @@ export class SubaruPythonBridge {
       try {
         await this.bootstrapRuntime();
       } catch (err: any) {
-        this.log.error('Failed to bootstrap isolated Python environment:', err.message);
+        this.log.error(`Failed to bootstrap isolated Python environment: ${formatLogError(err)}`);
         return false;
       }
     }
@@ -195,7 +200,7 @@ export class SubaruPythonBridge {
     try {
       return await this.ensureInitialized(true);
     } catch (err: any) {
-      this.log.error('Failed to initialize MySubaru Python bridge:', err.message);
+      this.log.error(`Failed to initialize MySubaru Python bridge: ${formatLogError(err)}`);
       return false;
     }
   }
@@ -218,30 +223,16 @@ export class SubaruPythonBridge {
       const initResult = await this.sendRpc('init', initParams, 60000);
 
       if (initResult.status === '2fa_required') {
-        this.log.warn('====================================================================');
         this.log.warn(
-          `MySubaru Two-Factor Authentication (2FA) is required for Device ID ${initParams.device_id}!`,
+          `MySubaru 2FA is required for Device ID ${initParams.device_id}. Available contact methods: ${JSON.stringify(initResult.contact_methods)}. Enter one under "2FA Contact Method" in plugin settings and restart Homebridge.`,
         );
-        this.log.warn(
-          'Available Contact Methods:',
-          JSON.stringify(initResult.contact_methods, null, 2),
-        );
-        this.log.warn(
-          'To complete 2FA: Open the SubaruLink plugin settings -> "Device Identity & Two-Factor Authentication (2FA)", enter one of the contact method keys above under "2FA Contact Method", and restart Homebridge.',
-        );
-        this.log.warn('====================================================================');
         return false;
       }
 
       if (initResult.status === '2fa_code_sent') {
-        this.log.warn('====================================================================');
         this.log.warn(
-          `2FA verification code has been sent via "${initResult.requested_method}"!`,
+          `MySubaru 2FA verification code sent via "${initResult.requested_method}". Enter the 6-digit code in plugin settings and restart Homebridge.`,
         );
-        this.log.warn(
-          'Check your SMS/Email, enter the 6-digit code into the plugin settings under "2FA 6-Digit Verification Code", and restart Homebridge.',
-        );
-        this.log.warn('====================================================================');
         return false;
       }
 
@@ -258,10 +249,10 @@ export class SubaruPythonBridge {
       this.initialized = true;
       if (isInitialStart) {
         this.log.info(
-          `Connected to MySubaru API using embedded subarulink v${initResult.version} (Device ID: ${initParams.device_id})`,
+          `Connected to MySubaru API (subarulink v${initResult.version}, Device ID: ${initParams.device_id})`,
         );
       } else {
-        this.log.info(
+        this.log.debug(
           `Re-initialized MySubaru API session after bridge restart (subarulink v${initResult.version}).`,
         );
       }
@@ -441,7 +432,7 @@ export class SubaruPythonBridge {
 
     if (method !== 'init' && method !== 'shutdown') {
       if (!this.proc || !this.proc.stdin.writable || !this.initialized) {
-        this.log.warn(
+        this.log.debug(
           `Python bridge is not initialized before "${method}"; respawning and re-authenticating...`,
         );
         const ready = await this.ensureInitialized(false);

@@ -43,11 +43,27 @@ jobs:
       - name: Build TypeScript
         run: pnpm run build
 
-      - name: Verify compiled dist/ and JSON manifests
+      - name: Verify built package & JSON manifests
         run: |
-          node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8')); JSON.parse(require('fs').readFileSync('config.schema.json', 'utf8'));"
-          git diff --exit-code dist/
-          npm pack --dry-run --ignore-scripts
+          node -e '
+            const fs = require("node:fs");
+            const { execSync } = require("node:child_process");
+            JSON.parse(fs.readFileSync("package.json", "utf8"));
+            JSON.parse(fs.readFileSync("config.schema.json", "utf8"));
+            if (!fs.existsSync("dist/index.js") || !fs.existsSync("dist/index.d.ts")) {
+              throw new Error("Missing compiled dist/index.js or dist/index.d.ts");
+            }
+            const packInfo = JSON.parse(execSync("npm pack --dry-run --json --ignore-scripts", { encoding: "utf8" }));
+            const files = new Set(packInfo[0].files.map((f) => f.path));
+            for (const req of ["dist/index.js", "python/subaru_bridge.py", "scripts/bootstrap-python.mjs", "config.schema.json"]) {
+              if (!files.has(req)) throw new Error(`Missing required file in npm tarball: ${req}`);
+            }
+            for (const f of files) {
+              if (f.endsWith(".map") || f.startsWith(".runtime/")) {
+                throw new Error(`Unexpected artifact in npm tarball: ${f}`);
+              }
+            }
+          '
 
       - name: Bootstrap Python >=3.14 & subarulink
         run: pnpm run bootstrap

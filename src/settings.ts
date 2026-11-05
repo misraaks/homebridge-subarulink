@@ -24,6 +24,57 @@ export function sanitizeHapName(raw: string, fallback = 'Subaru'): string {
   return fallback;
 }
 
+/**
+ * Strips multi-line HTML error bodies, aiohttp RequestInfo dumps (containing cookies/headers),
+ * and collapses whitespace so Homebridge logs stay concise and single-line.
+ */
+export function formatLogError(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : String(err ?? 'Unknown error');
+
+  let msg = raw;
+  let endpoint = '';
+  const reqIdx = msg.indexOf('RequestInfo(');
+  if (reqIdx !== -1) {
+    const urlMatch = msg.slice(reqIdx).match(/url=URL\('https?:\/\/[^/]+([^']*)'\)/);
+    if (urlMatch?.[1]) {
+      endpoint = urlMatch[1];
+    }
+    msg = msg.slice(0, reqIdx);
+  }
+
+  if (/<!DOCTYPE|<html/i.test(msg)) {
+    const h1Match = msg.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+    const titleMatch = msg.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const summary = (h1Match?.[1] || titleMatch?.[1] || '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const prefix = msg
+      .split(/<!DOCTYPE|<html/i)[0]
+      .trim()
+      .replace(/:+$/, '');
+    if (summary) {
+      msg = prefix ? `${prefix} (${summary})` : summary;
+    } else {
+      msg = prefix ? `${prefix} (HTML error response)` : 'HTML error response';
+    }
+  }
+
+  msg = msg.replace(/\s+/g, ' ').trim().replace(/:+$/, '');
+  if (endpoint && !msg.includes(endpoint)) {
+    msg = `${msg} [${endpoint}]`;
+  }
+  if (msg.length > 220) {
+    msg = `${msg.slice(0, 217)}...`;
+  }
+  return msg || 'Unknown error';
+}
+
 export interface SubaruLinkConfig extends PlatformConfig {
   name: string;
   username?: string;

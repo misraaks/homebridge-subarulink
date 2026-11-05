@@ -34,6 +34,7 @@ const require = createRequire(import.meta.url);
 const { SubaruPythonBridge } = require(path.join(PLUGIN_ROOT, 'dist', 'pythonBridge.js'));
 const { SubaruLinkPlatform } = require(path.join(PLUGIN_ROOT, 'dist', 'platform.js'));
 const { SubaruVehicleAccessory } = require(path.join(PLUGIN_ROOT, 'dist', 'platformAccessory.js'));
+const { formatLogError } = require(path.join(PLUGIN_ROOT, 'dist', 'settings.js'));
 const pluginEntry = require(path.join(PLUGIN_ROOT, 'dist', 'index.js'));
 const hbDistDir = path.dirname(require.resolve('homebridge'));
 const { HomebridgeAPI } = require(path.join(hbDistDir, 'api.js'));
@@ -207,11 +208,13 @@ class MockController:
     def __init__(self, websession, username, password, device_id, pin, device_name, country="USA", update_interval=7200, fetch_interval=300):
         self._pin = pin
         self._pin_invalid = False
+        self._expired_simulated = False
         self.device_registered = (username != "needs2fa@example.com")
         self.contact_methods = {"userName": "u***@example.com", "phone": "***-***-1234"}
         _record({"type": "init", "username": username, "device_id": device_id, "pid": os.getpid()})
 
     async def connect(self):
+        _record({"type": "connect"})
         return True
 
     async def request_auth_code(self, method):
@@ -265,6 +268,17 @@ class MockController:
         return ["Full Heat", "Full Cool", "Auto", "Winter Defrost"]
 
     async def fetch(self, vin, force=False):
+        if vin == "JF2EXPIRED0000003" and not self._expired_simulated:
+            self._expired_simulated = True
+            raise subarulink.SubaruException(
+                "HTTP 401: <!DOCTYPE html><html><body><h1>Oops!</h1></body></html> "
+                "RequestInfo(url=URL('https://mobileapi.prod.subarucs.com/g2v33/validateSession.json'), headers={'Cookie': 'JSESSIONID=SECRET'})"
+            )
+        if vin == "JF2PERM4010000004":
+            raise subarulink.SubaruException(
+                "HTTP 401: <!DOCTYPE html><html><body><h1>Oops! We can't seem to find the page you're looking for.</h1></body></html> "
+                "RequestInfo(url=URL('https://mobileapi.prod.subarucs.com/g2v33/validateSession.json'), headers={'Cookie': 'JSESSIONID=SECRET'})"
+            )
         if os.environ.get("MOCK_SLOW_FETCH") == "1" and not force:
             await asyncio.sleep(0.35)
         return True
@@ -526,6 +540,19 @@ async function testBridgeLifecycleConcurrencyAndCrashRecovery() {
       true,
     );
 
+    // Test transient HTTP 401 session expiry auto-reconnect & HTML/cookie sanitization in Python bridge
+    const recoveredTelemetry = await bridge.getTelemetry('JF2EXPIRED0000003', { force: true });
+    assert.equal(recoveredTelemetry.vin, 'JF2EXPIRED0000003', 'Expected auto-reconnect retry to succeed on transient HTTP 401');
+    await assert.rejects(
+      () => bridge.getTelemetry('JF2PERM4010000004', { force: true }),
+      (err) => {
+        assert.ok(!err.message.includes('<!DOCTYPE'), 'Python bridge error must strip HTML body');
+        assert.ok(!err.message.includes('JSESSIONID'), 'Python bridge error must strip session cookies');
+        assert.ok(err.message.includes('/g2v33/validateSession.json'), 'Python bridge error should include endpoint path');
+        return true;
+      },
+    );
+
     // Crash recovery test: SIGKILL the underlying Python daemon and immediately run executeCommand
     const eventsBeforeKill = JSON.parse(fs.readFileSync(logPath, 'utf8'));
     const initCountBefore = eventsBeforeKill.filter((e) => e.type === 'init').length;
@@ -701,8 +728,33 @@ async function testHomebridgeV2CachedAccessoryRestart() {
       'Crosstrek PHEV Remote Start - Winter Defrost',
     );
     assert.deepEqual(hapWarnings, [], `Unexpected HAP-NodeJS warnings: ${hapWarnings.join('; ')}`);
+
+    // Verify HTML / RequestInfo sanitization & transient poll failure suppression
+    const rawHtmlErr = `SubaruException: HTTP 401: <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">\n<html><head><title>AdminPortal</title></head><body><h1>Oops! We can't seem to find the page you're looking for.</h1></body></html>\nRequestInfo(url=URL('https://mobileapi.prod.subarucs.com/g2v33/validateSession.json'), method='GET', headers=<CIMultiDictProxy('Cookie': 'JSESSIONID=SECRET123')>)`;
+    const sanitized = formatLogError(new Error(rawHtmlErr));
+    assert.ok(!sanitized.includes('\n'), 'Sanitized log error must be single-line');
+    assert.ok(!sanitized.includes('JSESSIONID'), 'Sanitized log error must strip session cookies');
+    assert.ok(!sanitized.includes('<!DOCTYPE'), 'Sanitized log error must strip HTML markup');
+    assert.ok(sanitized.includes('/g2v33/validateSession.json'), 'Sanitized log error should preserve endpoint path');
+
+    logger.logs.length = 0;
+    platform.bridge.getTelemetry = async () => {
+      throw new Error(rawHtmlErr);
+    };
+    await handler2.refreshTelemetry({ wake: false, force: false }); // failure #1 -> debug only
+    await handler2.refreshTelemetry({ wake: false, force: false }); // failure #2 -> debug only
+    assert.equal(
+      logger.logs.filter((l) => l.level === 'warn').length,
+      0,
+      'First 2 transient background poll failures should log at debug, not warn',
+    );
+    await handler2.refreshTelemetry({ wake: false, force: false }); // failure #3 -> single concise warn
+    const warns = logger.logs.filter((l) => l.level === 'warn');
+    assert.equal(warns.length, 1, 'Expected 1 warn on 3rd consecutive poll failure');
+    assert.ok(!warns[0].msg.includes('JSESSIONID') && !warns[0].msg.includes('\n'));
+
     handler2.dispose();
-    console.log('   ✓ Homebridge v2.4.0 cached PlatformAccessory restart, HAP name validation & service pruning passed');
+    console.log('   ✓ Homebridge v2.4.0 cached PlatformAccessory restart, HAP name validation & log hygiene passed');
   } finally {
     console.warn = origWarn;
   }

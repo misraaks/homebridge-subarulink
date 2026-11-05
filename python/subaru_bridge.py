@@ -18,8 +18,9 @@ import traceback
 from typing import Any, Dict, Iterable, Optional, Set
 
 import aiohttp
+import re
 import subarulink
-from subarulink import Controller
+from subarulink import Controller, SubaruException
 import subarulink.const as sc
 
 
@@ -56,6 +57,65 @@ def _to_float(val: Any) -> Optional[float]:
         return float(val)
     except (TypeError, ValueError):
         return None
+
+
+def _sanitize_error_message(raw_msg: str) -> str:
+    """
+    Strips multi-line HTML error pages, aiohttp RequestInfo dumps (which may contain
+    session cookies/headers), and collapses whitespace into a concise single-line message.
+    """
+    if not raw_msg:
+        return "Unknown error"
+
+    msg = raw_msg
+    # Extract endpoint path from RequestInfo before stripping it
+    endpoint = ""
+    req_idx = msg.find("RequestInfo(")
+    if req_idx != -1:
+        url_match = re.search(r"url=URL\('https?://[^/]+(/[^']*)'\)", msg[req_idx:])
+        if url_match:
+            endpoint = url_match.group(1)
+        msg = msg[:req_idx]
+
+    # Strip HTML documents or tags (e.g., MySubaru 401/502/503 AdminPortal pages)
+    if "<!DOCTYPE" in msg.upper() or "<html" in msg.lower():
+        h1_match = re.search(r"<h1[^>]*>(.*?)</h1>", msg, flags=re.IGNORECASE | re.DOTALL)
+        title_match = re.search(r"<title[^>]*>(.*?)</title>", msg, flags=re.IGNORECASE | re.DOTALL)
+        summary = ""
+        if h1_match:
+            summary = re.sub(r"<[^>]+>", "", h1_match.group(1)).strip()
+        elif title_match:
+            summary = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
+
+        prefix = re.split(r"<!DOCTYPE|<html", msg, maxsplit=1, flags=re.IGNORECASE)[0].strip().rstrip(":")
+        if summary:
+            msg = f"{prefix} ({summary})" if prefix else summary
+        else:
+            msg = f"{prefix} (HTML error response)" if prefix else "HTML error response"
+
+    msg = re.sub(r"\s+", " ", msg).strip().rstrip(":")
+    if endpoint:
+        msg = f"{msg} [{endpoint}]"
+    if len(msg) > 220:
+        msg = msg[:217] + "..."
+    return msg or "Unknown error"
+
+
+def _is_transient_auth_or_gateway_error(exc: BaseException) -> bool:
+    raw = str(exc).upper()
+    return any(
+        token in raw
+        for token in (
+            "HTTP 401",
+            "HTTP 403",
+            "HTTP 500",
+            "HTTP 502",
+            "HTTP 503",
+            "HTTP 504",
+            "VALIDATESESSION",
+            "SESSION",
+        )
+    )
 
 
 class SubaruBridgeDaemon:
@@ -458,6 +518,23 @@ class SubaruBridgeDaemon:
             "raw": raw,
         }
 
+    async def _call_with_reconnect_retry(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        """
+        Executes an async subarulink Controller operation, automatically re-authenticating
+        the session once if MySubaru returns a transient HTTP 401/5xx or session expiry error.
+        """
+        try:
+            return await fn(*args, **kwargs)
+        except (SubaruException, aiohttp.ClientError) as exc:
+            if self.ctrl and _is_transient_auth_or_gateway_error(exc):
+                async with self._init_lock:
+                    try:
+                        await self.ctrl.connect()
+                    except Exception:
+                        pass
+                return await fn(*args, **kwargs)
+            raise
+
     async def get_telemetry(self, params: Dict[str, Any]) -> Dict[str, Any]:
         if not self.ctrl:
             raise RuntimeError("Controller not initialized")
@@ -466,12 +543,12 @@ class SubaruBridgeDaemon:
         force_fetch = bool(params.get("force", False))
 
         if wake_vehicle:
-            await self.ctrl.update(vin, force=True)
-            await self.ctrl.fetch(vin, force=True)
+            await self._call_with_reconnect_retry(self.ctrl.update, vin, force=True)
+            await self._call_with_reconnect_retry(self.ctrl.fetch, vin, force=True)
         elif force_fetch:
-            await self.ctrl.fetch(vin, force=True)
+            await self._call_with_reconnect_retry(self.ctrl.fetch, vin, force=True)
         else:
-            await self.ctrl.fetch(vin, force=False)
+            await self._call_with_reconnect_retry(self.ctrl.fetch, vin, force=False)
 
         data = await self.ctrl.get_data(vin)
         presets = []
@@ -499,7 +576,7 @@ class SubaruBridgeDaemon:
                 self.ctrl.update_saved_pin(new_pin)
 
         if command == "lock":
-            ok = await self.ctrl.lock(vin)
+            ok = await self._call_with_reconnect_retry(self.ctrl.lock, vin)
         elif command == "unlock":
             door_mode = str(args.get("door", "ALL_DOORS")).upper()
             door_map = {
@@ -508,7 +585,7 @@ class SubaruBridgeDaemon:
                 "TAILGATE_DOOR": getattr(sc, "TAILGATE_DOOR", "TAILGATE_DOOR_CMD"),
             }
             target_door = door_map.get(door_mode, getattr(sc, "ALL_DOORS", "ALL_DOORS_CMD"))
-            ok = await self.ctrl.unlock(vin, door=target_door)
+            ok = await self._call_with_reconnect_retry(self.ctrl.unlock, vin, door=target_door)
         elif command == "remote_start":
             preset_req = str(args.get("preset", "Full Heat")).strip()
             available = await self.ctrl.list_climate_preset_names(vin) or []
@@ -517,25 +594,25 @@ class SubaruBridgeDaemon:
                 if p.lower() == preset_req.lower():
                     canonical_preset = p
                     break
-            ok = await self.ctrl.remote_start(vin, canonical_preset)
+            ok = await self._call_with_reconnect_retry(self.ctrl.remote_start, vin, canonical_preset)
         elif command == "remote_stop":
-            ok = await self.ctrl.remote_stop(vin)
+            ok = await self._call_with_reconnect_retry(self.ctrl.remote_stop, vin)
         elif command == "horn":
-            ok = await self.ctrl.horn(vin)
+            ok = await self._call_with_reconnect_retry(self.ctrl.horn, vin)
         elif command == "horn_stop":
-            ok = await self.ctrl.horn_stop(vin)
+            ok = await self._call_with_reconnect_retry(self.ctrl.horn_stop, vin)
         elif command == "lights":
-            ok = await self.ctrl.lights(vin)
+            ok = await self._call_with_reconnect_retry(self.ctrl.lights, vin)
         elif command == "lights_stop":
-            ok = await self.ctrl.lights_stop(vin)
+            ok = await self._call_with_reconnect_retry(self.ctrl.lights_stop, vin)
         elif command == "charge_start":
-            ok = await self.ctrl.charge_start(vin)
+            ok = await self._call_with_reconnect_retry(self.ctrl.charge_start, vin)
         elif command == "update":
-            ok = await self.ctrl.update(vin, force=True)
+            ok = await self._call_with_reconnect_retry(self.ctrl.update, vin, force=True)
             if ok:
-                await self.ctrl.fetch(vin, force=True)
+                await self._call_with_reconnect_retry(self.ctrl.fetch, vin, force=True)
         elif command == "fetch":
-            ok = await self.ctrl.fetch(vin, force=True)
+            ok = await self._call_with_reconnect_retry(self.ctrl.fetch, vin, force=True)
         else:
             raise ValueError(f"Unsupported command: {command}")
 
@@ -593,11 +670,11 @@ async def main() -> None:
             result = await handlers[method](params)
             response: Dict[str, Any] = {"id": req_id, "result": result}
         except Exception as exc:
-            sys.stderr.write(f"[subaru_bridge] Error handling request ({method}): {exc}\n")
-            traceback.print_exc(file=sys.stderr)
+            clean_err = _sanitize_error_message(str(exc))
+            sys.stderr.write(f"[subaru_bridge] Error handling request ({method}): {type(exc).__name__}: {clean_err}\n")
             response = {
                 "id": req_id,
-                "error": f"{type(exc).__name__}: {str(exc)}",
+                "error": f"{type(exc).__name__}: {clean_err}",
             }
 
         await write_response(response)

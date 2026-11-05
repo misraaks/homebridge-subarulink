@@ -1,7 +1,7 @@
 {
   "name": "homebridge-subarulink",
   "displayName": "Homebridge SubaruLink",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Self-contained Homebridge plugin for MySubaru Connected Services (Starlink) powered by G-Two/subarulink",
   "author": {
     "name": "misraaks",
@@ -34,8 +34,9 @@
     "homebridge": "^1.8.0 || ^2.0.0"
   },
   "scripts": {
+    "clean": "rimraf ./dist",
     "build": "rimraf ./dist && tsc",
-    "prepublishOnly": "rimraf ./dist && tsc && node scripts/bootstrap-python.mjs --runtime-dir ./.runtime && node scripts/smoke-test.mjs",
+    "prepublishOnly": "npm run build && npm run bootstrap && npm test",
     "bootstrap": "node scripts/bootstrap-python.mjs --runtime-dir ./.runtime",
     "watch": "tsc --watch",
     "auth": "node scripts/interactive-auth.mjs",
