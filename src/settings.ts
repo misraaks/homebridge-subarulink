@@ -25,6 +25,20 @@ export function sanitizeHapName(raw: string, fallback = 'Subaru'): string {
 }
 
 /**
+ * Repeatedly strips HTML tags and removes any remaining angle brackets so nested or
+ * malformed markup (e.g. `<scrip<script>t>`) cannot survive sanitization.
+ */
+function stripHtmlMarkup(input: string): string {
+  let current = input;
+  let previous: string;
+  do {
+    previous = current;
+    current = current.replace(/<[^>]*>/g, ' ');
+  } while (current !== previous);
+  return current.replace(/[<>]/g, '');
+}
+
+/**
  * Strips multi-line HTML error bodies, aiohttp RequestInfo dumps (containing cookies/headers),
  * and collapses whitespace so Homebridge logs stay concise and single-line.
  */
@@ -50,8 +64,7 @@ export function formatLogError(err: unknown): string {
   if (/<!DOCTYPE|<html/i.test(msg)) {
     const h1Match = msg.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
     const titleMatch = msg.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-    const summary = (h1Match?.[1] || titleMatch?.[1] || '')
-      .replace(/<[^>]+>/g, '')
+    const summary = stripHtmlMarkup(h1Match?.[1] || titleMatch?.[1] || '')
       .replace(/\s+/g, ' ')
       .trim();
     const prefix = msg
