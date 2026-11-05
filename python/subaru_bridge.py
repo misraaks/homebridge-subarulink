@@ -59,6 +59,17 @@ def _to_float(val: Any) -> Optional[float]:
         return None
 
 
+def _strip_html_markup(text: str) -> str:
+    """Repeatedly strip HTML tags and remove any remaining angle brackets."""
+    current = text
+    while True:
+        updated = re.sub(r"<[^>]*>", " ", current)
+        if updated == current:
+            break
+        current = updated
+    return re.sub(r"[<>]", "", current)
+
+
 def _sanitize_error_message(raw_msg: str) -> str:
     """
     Strips multi-line HTML error pages, aiohttp RequestInfo dumps (which may contain
@@ -83,9 +94,9 @@ def _sanitize_error_message(raw_msg: str) -> str:
         title_match = re.search(r"<title[^>]*>(.*?)</title>", msg, flags=re.IGNORECASE | re.DOTALL)
         summary = ""
         if h1_match:
-            summary = re.sub(r"<[^>]+>", "", h1_match.group(1)).strip()
+            summary = re.sub(r"\s+", " ", _strip_html_markup(h1_match.group(1))).strip()
         elif title_match:
-            summary = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
+            summary = re.sub(r"\s+", " ", _strip_html_markup(title_match.group(1))).strip()
 
         prefix = re.split(r"<!DOCTYPE|<html", msg, maxsplit=1, flags=re.IGNORECASE)[0].strip().rstrip(":")
         if summary:

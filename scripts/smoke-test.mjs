@@ -737,6 +737,15 @@ async function testHomebridgeV2CachedAccessoryRestart() {
     assert.ok(!sanitized.includes('<!DOCTYPE'), 'Sanitized log error must strip HTML markup');
     assert.ok(sanitized.includes('/g2v33/validateSession.json'), 'Sanitized log error should preserve endpoint path');
 
+    // Regression test for CodeQL js/incomplete-multi-character-sanitization (nested/unclosed angle brackets)
+    const nestedHtmlErr =
+      'HTTP 502: <html><body><h1>502 <scrip<script>t>alert(1)</script> Bad <script Gateway</h1></body></html>';
+    const sanitizedNested = formatLogError(new Error(nestedHtmlErr));
+    assert.ok(!sanitizedNested.includes('<'), 'Sanitized log error must not leave "<" from nested/unclosed tags');
+    assert.ok(!sanitizedNested.includes('>'), 'Sanitized log error must not leave ">" from nested/unclosed tags');
+    assert.ok(!sanitizedNested.toLowerCase().includes('<script'), 'Sanitized log error must not contain <script');
+    assert.ok(sanitizedNested.includes('502'), 'Sanitized log error should retain readable status summary');
+
     logger.logs.length = 0;
     platform.bridge.getTelemetry = async () => {
       throw new Error(rawHtmlErr);

@@ -6,7 +6,11 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
+    assignees:
+      - "misraaks"
     groups:
       dev-dependencies:
         dependency-type: "development"
@@ -21,7 +25,11 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
+    assignees:
+      - "misraaks"
     groups:
       actions:
         patterns:
