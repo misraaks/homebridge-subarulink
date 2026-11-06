@@ -22,7 +22,7 @@ jobs:
     # On GitHub Free, CodeQL / Code Scanning is free on public repositories
     # but unavailable on private repositories without paid GitHub Advanced Security.
     if: ${{ !github.event.repository.private }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       actions: read
