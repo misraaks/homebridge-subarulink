@@ -56,7 +56,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "homebridge": "^2.4.0",
+    "homebridge": "^2.5.0",
     "typescript": "^7.0.2"
   }
 }
