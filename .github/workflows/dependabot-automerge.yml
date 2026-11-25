@@ -12,7 +12,7 @@ permissions:
 jobs:
   automerge:
     name: Enable Auto-Merge (Dev Minor/Patch)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     if: github.actor == 'dependabot[bot]' && github.event.pull_request.user.login == 'dependabot[bot]'
     permissions:
