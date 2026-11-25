@@ -28,17 +28,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
-
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
-          cache: pnpm
+          package-manager-cache: false
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Set up pnpm and install dependencies
+        uses: pnpm/setup@v3
+        with:
+          node-version-file: false
+          cache: true
+          save-cache: ${{ matrix.node-version == '24.x' }}
+          require-lockfile: true
 
       - name: Build TypeScript
         run: pnpm run build
