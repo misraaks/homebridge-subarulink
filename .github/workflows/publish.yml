@@ -49,21 +49,21 @@ jobs:
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Install pnpm
-        if: steps.check.outputs.should_publish == 'true'
-        uses: pnpm/action-setup@v6
-
       - name: Setup Node.js
         if: steps.check.outputs.should_publish == 'true'
         uses: actions/setup-node@v7
         with:
-          node-version-file: 'package.json'
+          node-version: '24.x'
           registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
+          package-manager-cache: false
 
-      - name: Install dependencies
+      - name: Set up pnpm and install dependencies
         if: steps.check.outputs.should_publish == 'true'
-        run: pnpm install --frozen-lockfile
+        uses: pnpm/setup@v3
+        with:
+          node-version-file: false
+          cache: true
+          require-lockfile: true
 
       - name: Build TypeScript
         if: steps.check.outputs.should_publish == 'true'
